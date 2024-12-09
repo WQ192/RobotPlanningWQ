@@ -18,10 +18,10 @@
 #define bdrate 115200               /* 115200 baud */
 
 #define MAX_BUFFER_SIZE 256
-#define LINE_SPACING 20.0  // 20mm between lines
+#define LINE_SPACING 5.0  // 5mm between lines
 #define CHAR_WIDTH 6.0     // Default character width in font file units
 #define BASE_HEIGHT 18.0   // Base height of font characters in font file units
-#define LETTER_SPACING 8.0 // Spacing between letters in mm
+#define LETTER_SPACING 10.0 // Spacing between letters in mm
 #define MAX_GCODE_BUFFER_SIZE 10240 // Maximum size for the accumulated G-code buffer
 
 // Global variables
@@ -118,6 +118,9 @@ int main()
     // Reset pen to origin at the end
     resetPenToOrigin(gcodeBuffer, &bufferIndex);
 
+    // Print all accumulated G-code commands at once
+    printf("G-code for the robot:\n%s", gcodeBuffer);
+
     // Send all accumulated G-code commands to the robot
     printf("Sending G-code to the robot...\n");
     SendCommands(gcodeBuffer);
@@ -170,35 +173,41 @@ void readTextFile(const char *fileName) {
     }
 
     char word[MAX_BUFFER_SIZE];
-    float xOffset = 0.0;
-    float yOffset = yPosition;
+    float xOffset = 0.0;  // Start position for x
+    float yOffset = yPosition;  // Start position for y
+
+    const float FIXED_LINE_SPACING = 5.0; // Fixed spacing between lines in mm
+    const float DESCENDER_BUFFER = 2.0;  // Additional buffer for descenders in mm
+    float lineSpacing = scaleFactor * BASE_HEIGHT + DESCENDER_BUFFER + FIXED_LINE_SPACING;
 
     while (fscanf(file, "%s", word) != EOF) { // Read one word at a time
-        // Calculate the width of the word
+        // Calculate the total width of the word, including letter spacing
         float wordWidth = 0.0;
         for (size_t i = 0; i < strlen(word); i++) {
             wordWidth += scaleFactor * (CHAR_WIDTH + LETTER_SPACING);
         }
 
         // Check if the word fits in the current line
-        if (xOffset + wordWidth > 100.0) { // 100mm is the maximum width
+        if (xOffset + wordWidth > 100.0) { // Assuming 100mm is the maximum line width
             // Move to the next line
-            xOffset = 0.0;
-            yOffset -= LINE_SPACING;
+            xOffset = 0.0; // Reset the horizontal position
+            yOffset -= lineSpacing; // Adjust with dynamic line spacing
         }
 
-        // Draw the word
+        // Draw each character in the word
         for (size_t i = 0; i < strlen(word); i++) {
             generateGcode(word[i], xOffset, yOffset, gcodeBuffer, &bufferIndex);
-            xOffset += scaleFactor * (CHAR_WIDTH + LETTER_SPACING); // Move to next character
+            xOffset += scaleFactor * (CHAR_WIDTH + LETTER_SPACING); // Move x for the next character
         }
 
-        // Add a space after the word
+        // Add space after the word
         xOffset += scaleFactor * LETTER_SPACING;
     }
 
     fclose(file);
 }
+
+
 
 void generateGcode(char letter, float xOffset, float yOffset, char *gcodeBuffer, int *bufferIndex) {
     FontCharacter *character = &fontData[letter];
@@ -239,14 +248,18 @@ void resetPenToOrigin(char *gcodeBuffer, int *bufferIndex) {
 
 // Send the data to the robot - note in 'PC' mode you need to hit space twice
 // as the dummy 'WaitForReply' has a getch() within the function.
-void SendCommands (char *buffer )
-{
-    // printf ("Buffer to send: %s", buffer); // For diagnostic purposes only, normally comment out
-    PrintBuffer (&buffer[0]);
-    WaitForReply();
-    #ifdef MAC
-    sleep(0.1);
-    #else
-    Sleep(100); // Can omit this when using the writing robot but has minimal effect
-    #endif
+void SendCommands(char *buffer) {
+    char *line = strtok(buffer, "\n"); // Break buffer into lines
+    while (line != NULL) {
+        char lineBuffer[MAX_BUFFER_SIZE];
+        sprintf(lineBuffer, "%s\n", line); // Add newline back to the line
+        PrintBuffer(lineBuffer);          // Send the line
+        WaitForReply();                   // Wait for acknowledgment
+        #ifdef MAC
+        sleep(0.1); // Small delay for processing
+        #else
+        Sleep(100);
+        #endif
+        line = strtok(NULL, "\n");        // Get the next line
+    }
 }
