@@ -115,16 +115,16 @@ int main()
     printf("Processing text file...\n");
     readTextFile(textFile);
 
-    // Reset pen to origin at the end
-    resetPenToOrigin(gcodeBuffer, &bufferIndex);
-
-    // Print all accumulated G-code commands at once
+    // Print all accumulated G-code commands at once for simulation
     printf("G-code for the robot:\n%s", gcodeBuffer);
 
     // Send all accumulated G-code commands to the robot
     printf("Sending G-code to the robot...\n");
     SendCommands(gcodeBuffer);
     
+    // Reset pen to origin at the end
+    resetPenToOrigin(gcodeBuffer, &bufferIndex);
+
     // Before we exit the program we need to close the COM port
     CloseRS232Port();
     printf("Com port now closed\n");
